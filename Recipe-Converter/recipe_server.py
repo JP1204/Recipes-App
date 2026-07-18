@@ -30,10 +30,28 @@ EXPOSE TO YOUR PHONE (for testing):
 SHORTCUT USAGE:
   Your Shortcut becomes just:
     1. Receive URL from Share Sheet
-    2. "Get Contents of URL" -> POST to https://your-ngrok-url/extract-recipe
+    2. "Get Contents of URL" -> POST to https://your-server-url/extract-recipe
        with JSON body: {"tiktok_url": "<Shortcut Input>"}
-    3. Get Dictionary from Input -> Get Value for Key "recipe"
-    4. Show Result
+    3. Get Dictionary from Input -> pull out whichever key you need
+       (dish_name / ingredients / instructions), or just pass the whole
+       response along to another app (e.g. a Swift app via a URL scheme
+       or Shortcuts' "Open [App]" action with this JSON as input).
+
+RESPONSE SHAPE:
+  {
+    "dish_name": "Garlic Butter Shrimp Pasta",
+    "ingredients": [
+      {"name": "shrimp", "quantity": "1 lb"},
+      {"name": "linguine", "quantity": "8 oz"},
+      {"name": "garlic", "quantity": "4 cloves"}
+    ],
+    "instructions": [
+      "Boil the linguine according to package instructions.",
+      "Saute garlic in butter until fragrant.",
+      "Add shrimp and cook until pink.",
+      "Toss cooked pasta with the shrimp and garlic butter."
+    ]
+  }
 
 All the tikwm resolution, video download, base64 encoding, and Gemini
 call happen here on the server, not in Shortcuts.
@@ -54,10 +72,36 @@ GEMINI_URL = (
 )
 
 RECIPE_PROMPT = (
-    "Watch this cooking video and write out the recipe in a clear, "
-    "structured format: a list of ingredients with quantities, followed "
-    "by numbered step-by-step instructions."
+    "Watch this cooking video and extract the recipe. Identify the dish "
+    "name, every ingredient with its quantity and unit (if stated), and "
+    "the step-by-step instructions in order."
 )
+
+# Forces Gemini to return JSON matching this exact shape, instead of
+# free-form text. This makes the response reliably parseable by another
+# app (e.g. a Swift app comparing ingredients against a pantry list).
+RECIPE_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "dish_name": {"type": "STRING"},
+        "ingredients": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "quantity": {"type": "STRING"},
+                },
+                "required": ["name"],
+            },
+        },
+        "instructions": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+        },
+    },
+    "required": ["dish_name", "ingredients", "instructions"],
+}
 
 
 @app.route("/extract-recipe", methods=["POST"])
@@ -114,7 +158,11 @@ def extract_recipe():
                 {"text": RECIPE_PROMPT},
                 {"inline_data": {"mime_type": "video/mp4", "data": video_b64}},
             ]
-        }]
+        }],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": RECIPE_RESPONSE_SCHEMA,
+        },
     }
 
     try:
@@ -132,12 +180,25 @@ def extract_recipe():
         return jsonify({"error": "Unexpected Gemini response", "details": gemini_data}), 502
 
     try:
-        recipe_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
+        recipe_json_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
         return jsonify({"error": "Could not parse Gemini response", "details": gemini_data}), 502
 
-    return jsonify({"recipe": recipe_text})
+    # Because of responseSchema above, this text should already be a
+    # clean JSON string matching RECIPE_RESPONSE_SCHEMA. Parse it into a
+    # real dict so it comes back as nested JSON, not a JSON-encoded string.
+    try:
+        import json
+        recipe_structured = json.loads(recipe_json_text)
+    except json.JSONDecodeError:
+        return jsonify({
+            "error": "Gemini did not return valid JSON",
+            "raw_text": recipe_json_text,
+        }), 502
+
+    return jsonify(recipe_structured)
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
