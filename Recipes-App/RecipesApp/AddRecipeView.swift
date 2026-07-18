@@ -1,0 +1,210 @@
+//
+//  AddRecipeView.swift
+//  RecipesApp
+//
+//  Sheet to create or edit a recipe. Pass an existing recipe to edit it;
+//  omit to create a new one. Ingredients must come from the pantry.
+//
+
+import SwiftUI
+import SwiftData
+
+struct AddRecipeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query(sort: \PantryItem.name) private var pantryItems: [PantryItem]
+
+    /// When set, the form edits this recipe instead of creating a new one.
+    var recipe: Recipe?
+
+    @State private var name: String
+    @State private var instructions: String
+    @State private var notes: String
+    @State private var ingredients: [DraftIngredient]
+    @FocusState private var focusedIngredient: UUID?
+
+    /// In-memory draft (not persisted until Save).
+    struct DraftIngredient: Identifiable, Hashable {
+        let id = UUID()
+        var name: String = ""
+        var amount: String = ""
+    }
+
+    init(recipe: Recipe? = nil) {
+        self.recipe = recipe
+        _name = State(initialValue: recipe?.name ?? "")
+        _instructions = State(initialValue: recipe?.instructions ?? "")
+        _notes = State(initialValue: recipe?.notes ?? "")
+        let drafts = (recipe?.ingredients ?? [])
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            .map { DraftIngredient(name: $0.name, amount: $0.amount) }
+        _ingredients = State(initialValue: drafts.isEmpty ? [DraftIngredient()] : drafts)
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Normalized pantry name → canonical display name.
+    private var pantryLookup: [String: String] {
+        Dictionary(pantryItems.map { (PantryMatcher.normalize($0.name), $0.name) },
+                   uniquingKeysWith: { first, _ in first })
+    }
+
+    private func isInPantry(_ name: String) -> Bool {
+        pantryLookup[PantryMatcher.normalize(name)] != nil
+    }
+
+    /// Pantry names matching the typed text (excluding an exact match).
+    private func suggestions(for text: String) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matches = trimmed.isEmpty
+            ? pantryItems.map(\.name)
+            : pantryItems.map(\.name).filter {
+                $0.localizedCaseInsensitiveContains(trimmed)
+                    && PantryMatcher.normalize($0) != PantryMatcher.normalize(trimmed)
+            }
+        return Array(matches.prefix(6))
+    }
+
+    private var hasAnyIngredient: Bool {
+        ingredients.contains { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    /// Every non-empty ingredient must be a pantry item.
+    private var allIngredientsInPantry: Bool {
+        ingredients.allSatisfy {
+            let n = $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return n.isEmpty || isInPantry(n)
+        }
+    }
+
+    private var isValid: Bool {
+        !trimmedName.isEmpty && hasAnyIngredient && allIngredientsInPantry
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Recipe") {
+                    TextField("Name (e.g. Chicken Curry)", text: $name)
+                        .textInputAutocapitalization(.words)
+                }
+
+                Section {
+                    if pantryItems.isEmpty {
+                        Text("Your pantry is empty. Add pantry items first — recipes can only use ingredients from your pantry.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach($ingredients) { $ing in
+                            VStack(alignment: .leading, spacing: 4) {
+                                TextField("Ingredient (type to search pantry)", text: $ing.name)
+                                    .textInputAutocapitalization(.words)
+                                    .autocorrectionDisabled()
+                                    .focused($focusedIngredient, equals: ing.id)
+
+                                if !ing.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    && !isInPantry(ing.name) && focusedIngredient != ing.id {
+                                    Text("Not in pantry")
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                }
+
+                                if focusedIngredient == ing.id {
+                                    ForEach(suggestions(for: ing.name), id: \.self) { suggestion in
+                                        Button {
+                                            ing.name = suggestion
+                                            focusedIngredient = nil
+                                        } label: {
+                                            Label(suggestion, systemImage: "arrow.up.left")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.tint)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+
+                                TextField("Amount (optional, e.g. 2 cups)", text: $ing.amount)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .onDelete { offsets in
+                            ingredients.remove(atOffsets: offsets)
+                            if ingredients.isEmpty {
+                                ingredients.append(DraftIngredient())
+                            }
+                        }
+
+                        Button {
+                            ingredients.append(DraftIngredient())
+                        } label: {
+                            Label("Add Ingredient", systemImage: "plus.circle")
+                        }
+                    }
+                } header: {
+                    Text("Ingredients")
+                } footer: {
+                    if !pantryItems.isEmpty {
+                        Text("Type to search your pantry — ingredients must be pantry items.")
+                    }
+                }
+
+                Section("Instructions") {
+                    TextEditor(text: $instructions)
+                        .frame(minHeight: 100)
+                }
+
+                Section("Notes") {
+                    TextEditor(text: $notes)
+                        .frame(minHeight: 60)
+                }
+            }
+            .navigationTitle(recipe == nil ? "New Recipe" : "Edit Recipe")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save).disabled(!isValid)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let target: Recipe
+        if let recipe {
+            target = recipe
+            target.name = trimmedName
+            target.instructions = instructions
+            target.notes = notes
+            // Replace ingredients wholesale — simplest way to apply edits.
+            for ing in target.ingredients {
+                context.delete(ing)
+            }
+            target.ingredients.removeAll()
+        } else {
+            target = Recipe(name: trimmedName, instructions: instructions, notes: notes)
+            context.insert(target)
+        }
+
+        for draft in ingredients {
+            let cleanName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Use the pantry item's canonical name (matching is case-insensitive).
+            guard let pantryName = pantryLookup[PantryMatcher.normalize(cleanName)] else { continue }
+            let ing = RecipeIngredient(name: pantryName, amount: draft.amount)
+            ing.recipe = target
+            target.ingredients.append(ing)
+            context.insert(ing)
+        }
+        dismiss()
+    }
+}
+
+#Preview {
+    AddRecipeView()
+        .modelContainer(for: [PantryItem.self, Recipe.self, RecipeIngredient.self],
+                        inMemory: true)
+}
