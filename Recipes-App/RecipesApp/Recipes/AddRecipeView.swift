@@ -18,7 +18,7 @@ struct AddRecipeView: View {
     var recipe: Recipe?
 
     @State private var name: String
-    @State private var instructions: String
+    @State private var steps: [DraftStep]
     @State private var notes: String
     @State private var ingredients: [DraftIngredient]
     @FocusState private var focusedIngredient: UUID?
@@ -30,15 +30,42 @@ struct AddRecipeView: View {
         var amount: String = ""
     }
 
+    /// In-memory draft for one instruction step.
+    struct DraftStep: Identifiable, Hashable {
+        let id = UUID()
+        var text: String = ""
+    }
+
     init(recipe: Recipe? = nil) {
         self.recipe = recipe
         _name = State(initialValue: recipe?.name ?? "")
-        _instructions = State(initialValue: recipe?.instructions ?? "")
         _notes = State(initialValue: recipe?.notes ?? "")
+
+        // Seed steps from the recipe's step list, or migrate a legacy
+        // single-blob `instructions` string by splitting it into lines.
+        let existingSteps = recipe?.steps ?? []
+        let seededSteps: [DraftStep]
+        if !existingSteps.isEmpty {
+            seededSteps = existingSteps.map { DraftStep(text: $0) }
+        } else if let legacy = recipe?.instructions,
+                  !legacy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            seededSteps = legacy
+                .split(whereSeparator: \.isNewline)
+                .map { DraftStep(text: String($0).trimmingCharacters(in: .whitespaces)) }
+        } else {
+            seededSteps = []
+        }
+        _steps = State(initialValue: seededSteps.isEmpty ? [DraftStep()] : seededSteps)
+
         let drafts = (recipe?.ingredients ?? [])
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             .map { DraftIngredient(name: $0.name, amount: $0.amount) }
         _ingredients = State(initialValue: drafts.isEmpty ? [DraftIngredient()] : drafts)
+    }
+
+    /// 1-based position of a step, for display numbering.
+    private func stepNumber(for step: DraftStep) -> Int {
+        (steps.firstIndex(of: step) ?? 0) + 1
     }
 
     private var trimmedName: String {
@@ -150,9 +177,43 @@ struct AddRecipeView: View {
                     }
                 }
 
-                Section("Instructions") {
-                    TextEditor(text: $instructions)
-                        .frame(minHeight: 100)
+                Section {
+                    ForEach($steps) { $step in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(stepNumber(for: step)).")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            TextField("Describe this step",
+                                      text: $step.text,
+                                      axis: .vertical)
+                                .textInputAutocapitalization(.sentences)
+                        }
+                    }
+                    .onMove { indices, newOffset in
+                        steps.move(fromOffsets: indices, toOffset: newOffset)
+                    }
+                    .onDelete { offsets in
+                        steps.remove(atOffsets: offsets)
+                        if steps.isEmpty { steps.append(DraftStep()) }
+                    }
+
+                    Button {
+                        steps.append(DraftStep())
+                    } label: {
+                        Label("Add Step", systemImage: "plus.circle")
+                    }
+                } header: {
+                    HStack {
+                        Text("Instructions")
+                        Spacer()
+                        if steps.contains(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                            EditButton()
+                                .font(.body)
+                                .textCase(nil)
+                        }
+                    }
+                } footer: {
+                    Text("Tap a step to edit. Tap Edit to drag-reorder or delete steps.")
                 }
 
                 Section("Notes") {
@@ -174,11 +235,18 @@ struct AddRecipeView: View {
     }
 
     private func save() {
+        // Trim each step and drop empties, preserving order.
+        let cleanSteps = steps
+            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
         let target: Recipe
         if let recipe {
             target = recipe
             target.name = trimmedName
-            target.instructions = instructions
+            target.steps = cleanSteps
+            // Keep the legacy field mirrored so nothing else breaks.
+            target.instructions = cleanSteps.joined(separator: "\n")
             target.notes = notes
             // Replace ingredients wholesale — simplest way to apply edits.
             for ing in target.ingredients {
@@ -186,7 +254,10 @@ struct AddRecipeView: View {
             }
             target.ingredients.removeAll()
         } else {
-            target = Recipe(name: trimmedName, instructions: instructions, notes: notes)
+            target = Recipe(name: trimmedName,
+                            steps: cleanSteps,
+                            instructions: cleanSteps.joined(separator: "\n"),
+                            notes: notes)
             context.insert(target)
         }
 

@@ -68,54 +68,22 @@
 			children = (
 				DBE149A5EF2AD54E9A8F7BE2 /* RecipesAppApp.swift */,
 				3CA63278175151F945BC14A3 /* ContentView.swift */,
+				1B217B6DFFCA199A82237309 /* PantryItem.swift */,
+				DDB379BEABB70BA1E2C7A34B /* Recipe.swift */,
+				3C562CEAD910D19D0957C5B8 /* RecipeIngredient.swift */,
+				21C363A22A17510B676B2F64 /* PantryMatcher.swift */,
+				432B09388023465BEA616C19 /* PantryView.swift */,
+				8FDE5907F578FD69964C8514 /* AddPantryItemView.swift */,
+				3CEF9DBD47FE1436A479CEF2 /* RecipesView.swift */,
+				439464C9C04816BBD421A5FB /* RecipeDetailView.swift */,
+				75FCF52E5CE15452A188620A /* AddRecipeView.swift */,
+				D6B9B286EEA2CA1C6EBC141B /* SearchView.swift */,
+				D4E5F60718293A4B5C6D7E8F /* AddRecipeIntent.swift */,
 				B2C3D4E5F60718293A4B5C6D /* SharedModelContainer.swift */,
-				1A2B3C4D5E6F708192A3B401 /* Pantry */,
-				1A2B3C4D5E6F708192A3B402 /* Recipes */,
-				1A2B3C4D5E6F708192A3B403 /* WhatCanIMake */,
-				1A2B3C4D5E6F708192A3B404 /* AppIntents */,
 				3F48DF4F3860AD99D8ED0721 /* Assets.xcassets */,
 				282985F0EE2F9B95FB2A21BA /* Preview Content */,
 			);
 			path = RecipesApp;
-			sourceTree = "<group>";
-		};
-		1A2B3C4D5E6F708192A3B401 /* Pantry */ = {
-			isa = PBXGroup;
-			children = (
-				1B217B6DFFCA199A82237309 /* PantryItem.swift */,
-				432B09388023465BEA616C19 /* PantryView.swift */,
-				8FDE5907F578FD69964C8514 /* AddPantryItemView.swift */,
-			);
-			path = Pantry;
-			sourceTree = "<group>";
-		};
-		1A2B3C4D5E6F708192A3B402 /* Recipes */ = {
-			isa = PBXGroup;
-			children = (
-				DDB379BEABB70BA1E2C7A34B /* Recipe.swift */,
-				3C562CEAD910D19D0957C5B8 /* RecipeIngredient.swift */,
-				3CEF9DBD47FE1436A479CEF2 /* RecipesView.swift */,
-				439464C9C04816BBD421A5FB /* RecipeDetailView.swift */,
-				75FCF52E5CE15452A188620A /* AddRecipeView.swift */,
-			);
-			path = Recipes;
-			sourceTree = "<group>";
-		};
-		1A2B3C4D5E6F708192A3B403 /* WhatCanIMake */ = {
-			isa = PBXGroup;
-			children = (
-				D6B9B286EEA2CA1C6EBC141B /* SearchView.swift */,
-				21C363A22A17510B676B2F64 /* PantryMatcher.swift */,
-			);
-			path = WhatCanIMake;
-			sourceTree = "<group>";
-		};
-		1A2B3C4D5E6F708192A3B404 /* AppIntents */ = {
-			isa = PBXGroup;
-			children = (
-				D4E5F60718293A4B5C6D7E8F /* AddRecipeIntent.swift */,
-			);
-			path = AppIntents;
 			sourceTree = "<group>";
 		};
 		282985F0EE2F9B95FB2A21BA /* Preview Content */ = {

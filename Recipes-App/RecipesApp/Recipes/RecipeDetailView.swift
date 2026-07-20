@@ -41,7 +41,21 @@ struct RecipeDetailView: View {
                 }
             }
 
-            if !recipe.instructions.trimmingCharacters(in: .whitespaces).isEmpty {
+            if !recipe.steps.isEmpty {
+                Section("Instructions") {
+                    ForEach(Array(recipe.steps.enumerated()), id: \.offset) { index, step in
+                        HStack(alignment: .top, spacing: 12) {
+                            Text("\(index + 1)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(.tint))
+                            Text(step)
+                        }
+                    }
+                }
+            } else if !recipe.instructions.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Legacy recipe not yet re-saved into steps.
                 Section("Instructions") {
                     Text(recipe.instructions)
                 }
