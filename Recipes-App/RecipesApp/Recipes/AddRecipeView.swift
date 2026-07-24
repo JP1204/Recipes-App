@@ -3,7 +3,9 @@
 //  RecipesApp
 //
 //  Sheet to create or edit a recipe. Pass an existing recipe to edit it;
-//  omit to create a new one. Ingredients must come from the pantry.
+//  omit to create a new one. Ingredients are typed freely — recipes and
+//  the pantry are independent lists; pantry matching (used elsewhere for
+//  "What Can I Make?") is shown here only as a hint, never required.
 //
 
 import SwiftUI
@@ -98,16 +100,8 @@ struct AddRecipeView: View {
         ingredients.contains { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
-    /// Every non-empty ingredient must be a pantry item.
-    private var allIngredientsInPantry: Bool {
-        ingredients.allSatisfy {
-            let n = $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            return n.isEmpty || isInPantry(n)
-        }
-    }
-
     private var isValid: Bool {
-        !trimmedName.isEmpty && hasAnyIngredient && allIngredientsInPantry
+        !trimmedName.isEmpty && hasAnyIngredient
     }
 
     var body: some View {
@@ -119,61 +113,56 @@ struct AddRecipeView: View {
                 }
 
                 Section {
-                    if pantryItems.isEmpty {
-                        Text("Your pantry is empty. Add pantry items first — recipes can only use ingredients from your pantry.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach($ingredients) { $ing in
-                            VStack(alignment: .leading, spacing: 4) {
-                                TextField("Ingredient (type to search pantry)", text: $ing.name)
-                                    .textInputAutocapitalization(.words)
-                                    .autocorrectionDisabled()
-                                    .focused($focusedIngredient, equals: ing.id)
+                    ForEach($ingredients) { $ing in
+                        VStack(alignment: .leading, spacing: 4) {
+                            TextField("Ingredient", text: $ing.name)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
+                                .focused($focusedIngredient, equals: ing.id)
 
-                                if !ing.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                    && !isInPantry(ing.name) && focusedIngredient != ing.id {
-                                    Text("Not in pantry")
-                                        .font(.caption)
-                                        .foregroundStyle(.red)
-                                }
-
-                                if focusedIngredient == ing.id {
-                                    ForEach(suggestions(for: ing.name), id: \.self) { suggestion in
-                                        Button {
-                                            ing.name = suggestion
-                                            focusedIngredient = nil
-                                        } label: {
-                                            Label(suggestion, systemImage: "arrow.up.left")
-                                                .font(.subheadline)
-                                                .foregroundStyle(.tint)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-
-                                TextField("Amount (optional, e.g. 2 cups)", text: $ing.amount)
+                            if !ing.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                && !isInPantry(ing.name) && focusedIngredient != ing.id {
+                                Text("Not currently in pantry")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                        }
-                        .onDelete { offsets in
-                            ingredients.remove(atOffsets: offsets)
-                            if ingredients.isEmpty {
-                                ingredients.append(DraftIngredient())
-                            }
-                        }
 
-                        Button {
-                            ingredients.append(DraftIngredient())
-                        } label: {
-                            Label("Add Ingredient", systemImage: "plus.circle")
+                            if focusedIngredient == ing.id {
+                                ForEach(suggestions(for: ing.name), id: \.self) { suggestion in
+                                    Button {
+                                        ing.name = suggestion
+                                        focusedIngredient = nil
+                                    } label: {
+                                        Label(suggestion, systemImage: "arrow.up.left")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.tint)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+
+                            TextField("Amount (optional, e.g. 2 cups)", text: $ing.amount)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                    }
+                    .onDelete { offsets in
+                        ingredients.remove(atOffsets: offsets)
+                        if ingredients.isEmpty {
+                            ingredients.append(DraftIngredient())
+                        }
+                    }
+
+                    Button {
+                        ingredients.append(DraftIngredient())
+                    } label: {
+                        Label("Add Ingredient", systemImage: "plus.circle")
                     }
                 } header: {
                     Text("Ingredients")
                 } footer: {
                     if !pantryItems.isEmpty {
-                        Text("Type to search your pantry — ingredients must be pantry items.")
+                        Text("Type any ingredient. Matching pantry items are suggested as you type, but recipes don't need to match your pantry.")
                     }
                 }
 
@@ -263,9 +252,8 @@ struct AddRecipeView: View {
 
         for draft in ingredients {
             let cleanName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Use the pantry item's canonical name (matching is case-insensitive).
-            guard let pantryName = pantryLookup[PantryMatcher.normalize(cleanName)] else { continue }
-            let ing = RecipeIngredient(name: pantryName, amount: draft.amount)
+            guard !cleanName.isEmpty else { continue }
+            let ing = RecipeIngredient(name: cleanName, amount: draft.amount)
             ing.recipe = target
             target.ingredients.append(ing)
             context.insert(ing)

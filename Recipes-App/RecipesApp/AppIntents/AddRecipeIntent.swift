@@ -8,8 +8,8 @@
 //    "ingredients": [{"name": "…", "quantity": "…"}],
 //    "instructions": ["step 1", "step 2"]
 //  }
-//  Creates the Recipe and adds any ingredients not already in the
-//  pantry as out-of-stock PantryItems (i.e. "needed" items).
+//  Creates the Recipe. Recipes and the pantry are independent lists —
+//  this does not touch pantry items.
 //
 
 import AppIntents
@@ -19,7 +19,7 @@ import SwiftData
 struct AddRecipeIntent: AppIntent {
     static var title: LocalizedStringResource = "Add Recipes"
     static var description = IntentDescription(
-        "Adds a recipe from JSON and creates pantry items for any missing ingredients."
+        "Adds a recipe from JSON."
     )
 
     @Parameter(title: "Recipe JSON", description: "JSON with dish_name, ingredients, and instructions")
@@ -74,26 +74,9 @@ struct AddRecipeIntent: AppIntent {
         }
         context.insert(recipe)
 
-        // Add pantry items for ingredients not already in the pantry.
-        // New items are marked out of stock so they show up as needed.
-        let existing = try context.fetch(FetchDescriptor<PantryItem>())
-        var pantryNames = Set(existing.map { PantryMatcher.normalize($0.name) })
-
-        var addedItems: [String] = []
-        for ingredient in payload.ingredients {
-            let normalized = PantryMatcher.normalize(ingredient.name)
-            guard !normalized.isEmpty, !pantryNames.contains(normalized) else { continue }
-            context.insert(PantryItem(name: ingredient.name, inStock: false))
-            pantryNames.insert(normalized)
-            addedItems.append(ingredient.name)
-        }
-
         try context.save()
 
-        let pantrySummary = addedItems.isEmpty
-            ? "All ingredients were already in your pantry."
-            : "Added \(addedItems.count) needed pantry item\(addedItems.count == 1 ? "" : "s"): \(addedItems.joined(separator: ", "))."
-        return .result(dialog: "Added “\(name)” with \(recipe.ingredients.count) ingredients. \(pantrySummary)")
+        return .result(dialog: "Added “\(name)” with \(recipe.ingredients.count) ingredients.")
     }
 }
 
