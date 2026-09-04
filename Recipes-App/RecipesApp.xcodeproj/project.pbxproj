@@ -33,7 +33,6 @@
 		3F48DF4F3860AD99D8ED0721 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		432B09388023465BEA616C19 /* PantryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PantryView.swift; sourceTree = "<group>"; };
 		439464C9C04816BBD421A5FB /* RecipeDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeDetailView.swift; sourceTree = "<group>"; };
-		59F886305EE60466EC5E720F /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		75FCF52E5CE15452A188620A /* AddRecipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddRecipeView.swift; sourceTree = "<group>"; };
 		8FDE5907F578FD69964C8514 /* AddPantryItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPantryItemView.swift; sourceTree = "<group>"; };
 		A581CE8C83C6E3E2D5AB47A9 /* RecipesApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RecipesApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -94,14 +93,6 @@
 			path = AppIntents;
 			sourceTree = "<group>";
 		};
-		282985F0EE2F9B95FB2A21BA /* Preview Content */ = {
-			isa = PBXGroup;
-			children = (
-				59F886305EE60466EC5E720F /* Preview Assets.xcassets */,
-			);
-			path = "Preview Content";
-			sourceTree = "<group>";
-		};
 		3E55646611CD630C6193ABD5 = {
 			isa = PBXGroup;
 			children = (
@@ -121,7 +112,6 @@
 				1A2B3C4D5E6F708192A3B403 /* WhatCanIMake */,
 				1A2B3C4D5E6F708192A3B404 /* AppIntents */,
 				3F48DF4F3860AD99D8ED0721 /* Assets.xcassets */,
-				282985F0EE2F9B95FB2A21BA /* Preview Content */,
 			);
 			path = RecipesApp;
 			sourceTree = "<group>";
@@ -294,7 +284,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"RecipesApp/Preview Content\"";
 				DEVELOPMENT_TEAM = Z7YM9X5T3S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -380,7 +369,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"RecipesApp/Preview Content\"";
 				DEVELOPMENT_TEAM = Z7YM9X5T3S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
