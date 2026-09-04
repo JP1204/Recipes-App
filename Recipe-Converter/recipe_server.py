@@ -1,60 +1,12 @@
 """
 recipe_server.py
 
-A small Flask server that takes a TikTok URL, resolves it to a direct
-video file via tikwm, downloads it, base64-encodes it, and sends it to
-the Gemini API to extract a written recipe.
+Flask server that turns a TikTok cooking video URL into a structured
+recipe: resolves the URL via tikwm, downloads the video, base64-encodes
+it, and asks Gemini for the recipe under a fixed response schema.
 
-This moves the heavy lifting (download + base64 encoding) off your
-phone/Shortcuts and onto a computer/server, avoiding the memory issues
-that were freezing Shortcuts.
-
-SETUP:
-  pip install flask requests
-
-  Set your Gemini API key as an environment variable before running:
-    export GEMINI_API_KEY="your-key-here"
-
-RUN:
-  python recipe_server.py
-
-  This starts a local server on http://localhost:5000
-
-EXPOSE TO YOUR PHONE (for testing):
-  Use ngrok (https://ngrok.com, free tier) to get a public URL:
-    ngrok http 5000
-
-  This gives you a temporary public URL like https://abcd1234.ngrok.io
-  which you can call from your iOS Shortcut instead of localhost.
-
-SHORTCUT USAGE:
-  Your Shortcut becomes just:
-    1. Receive URL from Share Sheet
-    2. "Get Contents of URL" -> POST to https://your-server-url/extract-recipe
-       with JSON body: {"tiktok_url": "<Shortcut Input>"}
-    3. Get Dictionary from Input -> pull out whichever key you need
-       (dish_name / ingredients / instructions), or just pass the whole
-       response along to another app (e.g. a Swift app via a URL scheme
-       or Shortcuts' "Open [App]" action with this JSON as input).
-
-RESPONSE SHAPE:
-  {
-    "dish_name": "Garlic Butter Shrimp Pasta",
-    "ingredients": [
-      {"name": "shrimp", "quantity": "1 lb"},
-      {"name": "linguine", "quantity": "8 oz"},
-      {"name": "garlic", "quantity": "4 cloves"}
-    ],
-    "instructions": [
-      "Boil the linguine according to package instructions.",
-      "Saute garlic in butter until fragrant.",
-      "Add shrimp and cook until pink.",
-      "Toss cooked pasta with the shrimp and garlic butter."
-    ]
-  }
-
-All the tikwm resolution, video download, base64 encoding, and Gemini
-call happen here on the server, not in Shortcuts.
+Setup, running, the API reference, and the Shortcut wiring are in
+README.md in this folder.
 """
 
 import os
