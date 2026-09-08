@@ -16,6 +16,16 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+# tikwm (and the TikTok CDN behind it) reject requests carrying the default
+# python-requests User-Agent, especially from datacenter IPs like Render.
+# Spoofing a normal mobile Safari UA avoids that.
+TIKWM_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+    )
+}
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_URL = (
@@ -71,11 +81,23 @@ def extract_recipe():
         resolve_resp = requests.get(
             "https://www.tikwm.com/api/",
             params={"url": tiktok_url},
+            headers=TIKWM_HEADERS,
             timeout=20,
         )
-        resolve_data = resolve_resp.json()
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
+        # Actual network failure: DNS, connection refused, timeout, etc.
         return jsonify({"error": f"Failed to reach tikwm: {e}"}), 502
+
+    try:
+        resolve_data = resolve_resp.json()
+    except ValueError:
+        # tikwm responded, but not with JSON -- almost always means it
+        # blocked or rate-limited the request (e.g. an HTML error page).
+        return jsonify({
+            "error": "tikwm responded but not with JSON (likely blocked or rate-limited)",
+            "status_code": resolve_resp.status_code,
+            "raw_body": resolve_resp.text[:500],
+        }), 502
 
     if resolve_data.get("code") != 0:
         return jsonify({
@@ -89,7 +111,7 @@ def extract_recipe():
 
     # Step 2: download the actual video bytes
     try:
-        video_resp = requests.get(video_url, timeout=60)
+        video_resp = requests.get(video_url, headers=TIKWM_HEADERS, timeout=60)
         video_resp.raise_for_status()
         video_bytes = video_resp.content
     except Exception as e:
