@@ -5,8 +5,17 @@ Flask server that turns a TikTok cooking video URL into a structured
 recipe: resolves the URL via tikwm, downloads the video, base64-encodes
 it, and asks Gemini for the recipe under a fixed response schema.
 
-Setup, running, the API reference, and the Shortcut wiring are in
-README.md in this folder.
+tikwm rejects requests from Render's datacenter IPs with a bare 403,
+even with a browser-like User-Agent (confirmed: it's not a UA check).
+So resolving the direct video URL now normally happens on-device, in
+the iOS client (the RecipeShareExtension target, or the older
+Shortcut), which sends the already-resolved `video_url` in the request
+body -- see the `video_url` handling below. If it's omitted, this
+falls back to resolving via tikwm itself, which still works for direct
+API testing but will hit the same 403 if deployed on Render.
+
+Setup, running, and the API reference are in README.md in this folder.
+The Share Extension wiring is in ../RecipeShareExtension/README.md.
 """
 
 import os
@@ -76,38 +85,49 @@ def extract_recipe():
     if not tiktok_url:
         return jsonify({"error": "Missing 'tiktok_url' in request body"}), 400
 
-    # Step 1: resolve the TikTok URL to a direct video link via tikwm
-    try:
-        resolve_resp = requests.get(
-            "https://www.tikwm.com/api/",
-            params={"url": tiktok_url},
-            headers=TIKWM_HEADERS,
-            timeout=20,
-        )
-    except requests.exceptions.RequestException as e:
-        # Actual network failure: DNS, connection refused, timeout, etc.
-        return jsonify({"error": f"Failed to reach tikwm: {e}"}), 502
-
-    try:
-        resolve_data = resolve_resp.json()
-    except ValueError:
-        # tikwm responded, but not with JSON -- almost always means it
-        # blocked or rate-limited the request (e.g. an HTML error page).
-        return jsonify({
-            "error": "tikwm responded but not with JSON (likely blocked or rate-limited)",
-            "status_code": resolve_resp.status_code,
-            "raw_body": resolve_resp.text[:500],
-        }), 502
-
-    if resolve_data.get("code") != 0:
-        return jsonify({
-            "error": "tikwm could not resolve this TikTok URL",
-            "details": resolve_data,
-        }), 422
-
-    video_url = resolve_data.get("data", {}).get("play")
+    # Step 1: get a direct video link.
+    #
+    # Preferred path: the caller (RecipeShareExtension, running on the
+    # user's phone) already resolved this via tikwm on-device and sends
+    # it as `video_url`, sidestepping tikwm's block on Render's IPs.
+    #
+    # Fallback path: no `video_url` was sent, so resolve it here. Kept
+    # for direct API testing (e.g. curling this endpoint from your own
+    # machine) -- it will hit the same 403 tikwm gives Render if this
+    # server itself tries it while deployed there.
+    video_url = body.get("video_url")
     if not video_url:
-        return jsonify({"error": "No video URL found in tikwm response"}), 422
+        try:
+            resolve_resp = requests.get(
+                "https://www.tikwm.com/api/",
+                params={"url": tiktok_url},
+                headers=TIKWM_HEADERS,
+                timeout=20,
+            )
+        except requests.exceptions.RequestException as e:
+            # Actual network failure: DNS, connection refused, timeout, etc.
+            return jsonify({"error": f"Failed to reach tikwm: {e}"}), 502
+
+        try:
+            resolve_data = resolve_resp.json()
+        except ValueError:
+            # tikwm responded, but not with JSON -- almost always means
+            # it blocked or rate-limited the request (e.g. a bare 403).
+            return jsonify({
+                "error": "tikwm responded but not with JSON (likely blocked or rate-limited)",
+                "status_code": resolve_resp.status_code,
+                "raw_body": resolve_resp.text[:500],
+            }), 502
+
+        if resolve_data.get("code") != 0:
+            return jsonify({
+                "error": "tikwm could not resolve this TikTok URL",
+                "details": resolve_data,
+            }), 422
+
+        video_url = resolve_data.get("data", {}).get("play")
+        if not video_url:
+            return jsonify({"error": "No video URL found in tikwm response"}), 422
 
     # Step 2: download the actual video bytes
     try:

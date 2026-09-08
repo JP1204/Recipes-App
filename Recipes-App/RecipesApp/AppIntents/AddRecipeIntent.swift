@@ -8,8 +8,11 @@
 //    "ingredients": [{"name": "…", "quantity": "…"}],
 //    "instructions": ["step 1", "step 2"]
 //  }
-//  Creates the Recipe. Recipes and the pantry are independent lists —
-//  this does not touch pantry items.
+//  Decodes it and hands off to RecipeImporter (Recipes/RecipeImporter.swift)
+//  to actually build and save the Recipe -- that logic is shared with the
+//  Share Extension's import path, so this file's only job is "parse the
+//  JSON text a Shortcut hands us." Recipes and the pantry are independent
+//  lists -- this does not touch pantry items.
 //
 
 import AppIntents
@@ -52,31 +55,21 @@ struct AddRecipeIntent: AppIntent {
             throw AddRecipeError.invalidJSON(error.localizedDescription)
         }
 
-        let name = payload.dish_name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-            throw AddRecipeError.invalidJSON("dish_name is empty.")
+        let recipe: Recipe
+        do {
+            recipe = try RecipeImporter.save(
+                dishName: payload.dish_name,
+                ingredients: payload.ingredients.map {
+                    RecipeImporter.Ingredient(name: $0.name, quantity: $0.quantity)
+                },
+                instructions: payload.instructions,
+                into: SharedModelContainer.shared.mainContext
+            )
+        } catch {
+            throw AddRecipeError.invalidJSON(error.localizedDescription)
         }
 
-        let context = SharedModelContainer.shared.mainContext
-
-        // Build the recipe. The instructions array maps directly onto the
-        // recipe's ordered step list; the legacy string is kept mirrored.
-        let cleanSteps = payload.instructions
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let recipe = Recipe(
-            name: name,
-            steps: cleanSteps,
-            instructions: cleanSteps.joined(separator: "\n")
-        )
-        recipe.ingredients = payload.ingredients.map {
-            RecipeIngredient(name: $0.name, amount: $0.quantity ?? "")
-        }
-        context.insert(recipe)
-
-        try context.save()
-
-        return .result(dialog: "Added “\(name)” with \(recipe.ingredients.count) ingredients.")
+        return .result(dialog: "Added “\(recipe.name)” with \(recipe.ingredients.count) ingredients.")
     }
 }
 

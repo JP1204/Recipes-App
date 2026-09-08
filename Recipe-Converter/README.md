@@ -6,7 +6,9 @@ It resolves the URL to a direct video file via [tikwm](https://www.tikwm.com), d
 
 ## Why it exists
 
-The original version of this ran entirely inside an iOS Shortcut. Downloading a video and base64-encoding it on the phone kept exhausting Shortcuts' memory and freezing the app. Moving that work onto a computer leaves the Shortcut with nothing to do but one HTTP request and a dictionary lookup.
+The original version of this ran entirely inside an iOS Shortcut. Downloading a video and base64-encoding it on the phone kept exhausting Shortcuts' memory and freezing the app. Moving that work onto a computer leaves the client (Shortcut, or the `RecipeShareExtension` Xcode target -- see `../RecipeShareExtension/README.md`) with nothing to do but resolve the video URL and make one HTTP request.
+
+**Note:** tikwm blocks requests from Render's datacenter IPs with a bare 403 (confirmed -- happens even with a browser User-Agent). Because of this, resolving the TikTok URL to a direct video link now normally happens on the client, not here -- see `video_url` in the API section below.
 
 ## Setup
 
@@ -58,8 +60,13 @@ That gives you a temporary public URL like `https://abcd1234.ngrok.io` to call f
 **Request**
 
 ```json
-{ "tiktok_url": "https://www.tiktok.com/@someone/video/123456789" }
+{
+  "tiktok_url": "https://www.tiktok.com/@someone/video/123456789",
+  "video_url": "https://v16-webapp.tiktok.com/....mp4"
+}
 ```
+
+`video_url` is optional but strongly recommended: if present, this server skips its own tikwm call entirely and downloads that URL directly. Omit it only for local testing from your own machine -- if this server is deployed on Render and has to resolve tikwm itself, it will get the same 403 described above.
 
 **Response — `200 OK`**
 
@@ -96,13 +103,12 @@ Every failure returns `{"error": "…"}`, sometimes with a `details` key carryin
 | `500` | `GEMINI_API_KEY` isn't set on the server |
 | `502` | tikwm, the video host, or Gemini was unreachable, or Gemini returned something unparseable |
 
-## Wiring it into the iOS Shortcut
+## Calling it from the app
 
-The Shortcut is three actions:
+There are two clients, both hitting this same `/extract-recipe` endpoint and both ending up at the same `RecipeImporter.save` in the app:
 
-1. **Receive URL** from the Share Sheet.
-2. **Get Contents of URL** — `POST` to `https://your-server-url/extract-recipe` with a JSON body of `{"tiktok_url": "<Shortcut Input>"}`.
-3. **Get Dictionary from Input** — pull out whichever key you need, or pass the whole response to the **"Add Recipes"** App Intent in the Recipes App, which decodes exactly this shape into a `Recipe`.
+- **RecipeShareExtension** (recommended) — a Share Sheet extension bundled inside RecipesApp itself, so it works for anyone who's installed the app with no separate setup. It resolves the video via tikwm on-device, then POSTs `{"tiktok_url": ..., "video_url": ...}` here. See `../RecipeShareExtension/README.md` for what it does and the one-time Xcode wiring (App Groups, target membership) it needs.
+- **The iOS Shortcut** (legacy, still works) — three actions: Receive URL from the Share Sheet, `POST` to `https://your-server-url/extract-recipe` with `{"tiktok_url": "<Shortcut Input>"}` (no `video_url` — the Shortcut doesn't resolve tikwm itself, so this falls back to this server resolving it, which will 403 on Render), then Get Dictionary from Input and pass the response to the **"Add Recipes"** App Intent, which decodes exactly this shape into a `Recipe`. Kept around mainly for testing; the Share Extension is the one that needs no manual per-user setup.
 
 ## Notes and limits
 
